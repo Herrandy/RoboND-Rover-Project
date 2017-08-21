@@ -4,15 +4,20 @@ import cv2
 
 # Identify pixels above the threshold
 # Threshold of RGB > 160 does a nice job of identifying ground pixels only
-def color_thresh(img, rgb_thresh=(160, 160, 160)):
+def color_thresh(img, rgb_thresh=(160, 160, 160),invert=False):
     # Create an array of zeros same xy size as img, but single channel
     color_select = np.zeros_like(img[:,:,0])
     # Require that each pixel be above all three threshold values in RGB
     # above_thresh will now contain a boolean array with "True"
     # where threshold was met
-    above_thresh = (img[:,:,0] > rgb_thresh[0]) \
-                & (img[:,:,1] > rgb_thresh[1]) \
-                & (img[:,:,2] > rgb_thresh[2])
+    if invert == False:
+        above_thresh = (img[:,:,0] > rgb_thresh[0]) \
+                    & (img[:,:,1] > rgb_thresh[1]) \
+                    & (img[:,:,2] > rgb_thresh[2])
+    else:
+        above_thresh = (img[:,:,0] < rgb_thresh[0]) \
+                    & (img[:,:,1] < rgb_thresh[1]) \
+                    & (img[:,:,2] < rgb_thresh[2])
     # Index the array of zeros with the boolean array and set to 1
     color_select[above_thresh] = 1
     # Return the binary image
@@ -115,6 +120,9 @@ def perception_step(Rover):
         # Rover.nav_angles = rover_centric_angles
 
 
+
+
+
     # 1)
     image = Rover.img
     dst_size = 5
@@ -127,16 +135,18 @@ def perception_step(Rover):
                               ])
     # 2)
     warped = perspect_transform(image, source, destination)
+
     # 3)
+    obstacle_sel = color_thresh(warped, invert=True)
     color_sel = color_thresh(warped)
     rock_sel = detect_rock(warped)
-    #print(color_sel.dtype, color_sel.shape)
 
 
     # 4)
-    Rover.vision_image[:, :, 0] = 255
+    obstacle_sel[obstacle_sel > 0] = 255
+    Rover.vision_image[:, :, 0] = obstacle_sel
 
-    if np.sum(rock_sel > 0) > 50:  # reduce false positives
+    if np.sum(rock_sel > 0) > 50:  # reduce false positives for the rock detector
         rock_sel[rock_sel > 0] = 255
         Rover.vision_image[:, :, 1] = rock_sel
     else:
@@ -148,12 +158,16 @@ def perception_step(Rover):
     # 5)
     xpix, ypix = rover_coords(color_sel)
     rock_xpix, rock_ypix = rover_coords(rock_sel)
+    ob_xpix, ob_ypix = rover_coords(obstacle_sel)
 
     # 6)
     navigable_x_world, navigable_y_world = pix_to_world(xpix, ypix, Rover.pos[0],
                                     Rover.pos[1], Rover.yaw,
                                     Rover.worldmap.shape[0], 10)
     rock_x_world, rock_y_world = pix_to_world(rock_xpix, rock_ypix, Rover.pos[0],
+                                    Rover.pos[1], Rover.yaw,
+                                    Rover.worldmap.shape[0], 10)
+    ob_x_world, ob_y_world = pix_to_world(ob_xpix, ob_ypix, Rover.pos[0],
                                     Rover.pos[1], Rover.yaw,
                                     Rover.worldmap.shape[0], 10)
 
@@ -163,8 +177,13 @@ def perception_step(Rover):
         # Example: Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
         #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
         #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
+    Rover.worldmap[ob_y_world, ob_x_world, 0] += 1
     Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
-    Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
+
+    # tranformation wont be valid if we are shaking
+    if Rover.roll < 1 ** (-2) or Rover.roll > 359:
+        if  Rover.pitch < 1 ** (-2) or Rover.pitch > 359:
+            Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
 
     # 8) Convert rover-centric pixel positions to polar coordinates
     # Update Rover pixel distances and angles
