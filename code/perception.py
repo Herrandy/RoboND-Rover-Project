@@ -145,13 +145,11 @@ def perception_step(Rover):
     # 4)
     obstacle_sel[obstacle_sel > 0] = 255
     Rover.vision_image[:, :, 0] = obstacle_sel
-
     if np.sum(rock_sel > 0) > 50:  # reduce false positives for the rock detector
         rock_sel[rock_sel > 0] = 255
         Rover.vision_image[:, :, 1] = rock_sel
     else:
         Rover.vision_image[:, :, 1] = 255
-
     color_sel[color_sel > 0] = 255
     Rover.vision_image[:, :, 2] = color_sel
 
@@ -173,13 +171,9 @@ def perception_step(Rover):
 
 
 
-    # 7) Update Rover worldmap (to be displayed on right side of screen)
-        # Example: Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
-        #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
-        #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
+    # 7)
     Rover.worldmap[ob_y_world, ob_x_world, 0] += 1
     Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
-
     # tranformation wont be valid if we are shaking
     if Rover.roll < 1 ** (-2) or Rover.roll > 359:
         if  Rover.pitch < 1 ** (-2) or Rover.pitch > 359:
@@ -190,6 +184,6 @@ def perception_step(Rover):
     dist, angl = to_polar_coords(xpix, ypix)
     Rover.nav_dists = dist
     Rover.nav_angles = angl
-    print("Angle: ",angl)
+    print("Angle: ", angl)
 
     return Rover
